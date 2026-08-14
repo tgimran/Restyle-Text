@@ -225,7 +225,7 @@ export const TextInputSection: React.FC<TextInputSectionProps> = ({
             rows={2}
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            placeholder="Type your text to restyle in 30+ Unicode fonts and aesthetic styles..."
+            placeholder="Type your text to restyle"
             className="w-full bg-black/25 text-white placeholder-slate-400/80 text-lg sm:text-xl font-medium rounded-2xl p-3.5 sm:p-4 border border-white/15 focus:border-pink-400/60 focus:bg-black/35 focus:ring-4 focus:ring-pink-500/15 outline-none transition resize-none shadow-inner"
           />
 

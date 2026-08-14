@@ -2,7 +2,6 @@ import React, { useState, useMemo, useCallback, useDeferredValue, useEffect, use
 import {
   Copy,
   Check,
-  Heart,
   Search,
   Sparkles,
 } from 'lucide-react';
@@ -10,10 +9,7 @@ import { SymbolItem, SymbolSubcategory } from '../types';
 
 interface SymbolsViewProps {
   symbols: SymbolItem[];
-  favorites: string[];
-  toggleFavorite: (id: string) => void;
   onCopy: (symbol: string, label: string) => void;
-  showFavoritesOnly?: boolean;
 }
 
 const symbolSubcategories: { id: SymbolSubcategory; label: string; icon: string }[] = [
@@ -56,22 +52,18 @@ const BATCH_INCREMENT = 72;
 
 interface SymbolCardItemProps {
   item: SymbolItem;
-  isFav: boolean;
   isCopied: boolean;
   symbolSize: 'mini' | 'normal' | 'large';
   symbolCardPaddingClass: string;
   onCopySymbol: (item: SymbolItem) => void;
-  onToggleFav: (id: string) => void;
 }
 
 const SymbolCardItem: React.FC<SymbolCardItemProps> = React.memo(({
   item,
-  isFav,
   isCopied,
   symbolSize,
   symbolCardPaddingClass,
   onCopySymbol,
-  onToggleFav,
 }) => {
   const isLongSymbol =
     item.symbol.length > 5 ||
@@ -114,24 +106,9 @@ const SymbolCardItem: React.FC<SymbolCardItemProps> = React.memo(({
         className="flex items-center justify-between gap-1 mb-1 opacity-60 group-hover:opacity-100 transition-opacity"
         onClick={(e) => e.stopPropagation()}
       >
-        <span className="text-[10px] text-slate-400 truncate max-w-[120px] text-left">
+        <span className="text-[10px] text-slate-400 truncate max-w-full text-left">
           {item.name}
         </span>
-        
-        <div className="flex items-center gap-0.5">
-          <button
-            id={`btn-fav-sym-${item.id}`}
-            type="button"
-            onClick={() => onToggleFav(item.id)}
-            className={`p-1 rounded-full transition ${
-              isFav ? 'text-rose-400' : 'text-slate-400 hover:text-rose-300'
-            }`}
-            title={isFav ? 'Remove Favorite' : 'Save to Favorites'}
-            aria-label="Toggle Favorite"
-          >
-            <Heart className={`w-3 h-3 ${isFav ? 'fill-rose-400' : ''}`} />
-          </button>
-        </div>
       </div>
 
       {/* Symbol Display */}
@@ -163,10 +140,7 @@ SymbolCardItem.displayName = 'SymbolCardItem';
 
 export const SymbolsView: React.FC<SymbolsViewProps> = ({
   symbols,
-  favorites,
-  toggleFavorite,
   onCopy,
-  showFavoritesOnly = false,
 }) => {
   const [selectedSubcat, setSelectedSubcat] = useState<SymbolSubcategory>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -189,14 +163,11 @@ export const SymbolsView: React.FC<SymbolsViewProps> = ({
   // Reset pagination when category or search changes
   useEffect(() => {
     setVisibleCount(INITIAL_BATCH_SIZE);
-  }, [selectedSubcat, deferredSearch, showFavoritesOnly]);
+  }, [selectedSubcat, deferredSearch]);
 
   const filteredSymbols = useMemo(() => {
     const query = deferredSearch.trim().toLowerCase();
     return symbols.filter((item) => {
-      if (showFavoritesOnly && !favorites.includes(item.id)) {
-        return false;
-      }
       if (selectedSubcat !== 'all' && item.category !== selectedSubcat) {
         return false;
       }
@@ -208,7 +179,7 @@ export const SymbolsView: React.FC<SymbolsViewProps> = ({
       }
       return true;
     });
-  }, [symbols, selectedSubcat, deferredSearch, favorites, showFavoritesOnly]);
+  }, [symbols, selectedSubcat, deferredSearch]);
 
   // Render visible slice for maximum performance
   const displayedSymbols = useMemo(() => {
@@ -397,12 +368,10 @@ export const SymbolsView: React.FC<SymbolsViewProps> = ({
               <SymbolCardItem
                 key={item.id}
                 item={item}
-                isFav={favorites.includes(item.id)}
                 isCopied={copiedId === item.id}
                 symbolSize={symbolSize}
                 symbolCardPaddingClass={symbolCardPaddingClass}
                 onCopySymbol={handleCopySymbol}
-                onToggleFav={toggleFavorite}
               />
             ))}
           </div>

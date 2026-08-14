@@ -2,7 +2,6 @@ import React, { useState, useMemo, useCallback, useDeferredValue } from 'react';
 import {
   Copy,
   Check,
-  Heart,
   Search,
   Sparkles,
 } from 'lucide-react';
@@ -13,10 +12,7 @@ interface FontStylesViewProps {
   prefix: string;
   suffix: string;
   fontStyles: FontStyleItem[];
-  favorites: string[];
-  toggleFavorite: (id: string) => void;
   onCopy: (text: string, label: string) => void;
-  showFavoritesOnly?: boolean;
 }
 
 const subcategories: { id: FontSubcategory; label: string; icon: string }[] = [
@@ -39,11 +35,9 @@ interface FontCardItemProps {
   displayText: string;
   prefix: string;
   suffix: string;
-  isFav: boolean;
   isCopied: boolean;
   previewTextSizeClass: string;
   onCopyCard: (style: FontStyleItem, formattedOutput: string) => void;
-  onToggleFav: (id: string) => void;
 }
 
 const FontCardItem: React.FC<FontCardItemProps> = React.memo(({
@@ -51,11 +45,9 @@ const FontCardItem: React.FC<FontCardItemProps> = React.memo(({
   displayText,
   prefix,
   suffix,
-  isFav,
   isCopied,
   previewTextSizeClass,
   onCopyCard,
-  onToggleFav,
 }) => {
   const transformed = useMemo(() => style.transform(displayText), [style, displayText]);
   const finalOutput = prefix || suffix ? `${prefix}${transformed}${suffix}` : transformed;
@@ -89,24 +81,6 @@ const FontCardItem: React.FC<FontCardItemProps> = React.memo(({
               {style.badge}
             </span>
           )}
-        </div>
-
-        {/* Actions: Favorite */}
-        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-          <button
-            id={`btn-fav-${style.id}`}
-            type="button"
-            onClick={() => onToggleFav(style.id)}
-            className={`p-1.5 rounded-full transition ${
-              isFav
-                ? 'text-rose-400 bg-rose-500/20'
-                : 'text-slate-400 hover:text-rose-300 hover:bg-white/10'
-            }`}
-            title={isFav ? 'Remove from favorites' : 'Add to favorites'}
-            aria-label="Toggle Favorite"
-          >
-            <Heart className={`w-3.5 h-3.5 ${isFav ? 'fill-rose-400' : ''}`} />
-          </button>
         </div>
       </div>
 
@@ -152,10 +126,7 @@ export const FontStylesView: React.FC<FontStylesViewProps> = ({
   prefix,
   suffix,
   fontStyles,
-  favorites,
-  toggleFavorite,
   onCopy,
-  showFavoritesOnly = false,
 }) => {
   const [selectedSubcat, setSelectedSubcat] = useState<FontSubcategory>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -177,14 +148,10 @@ export const FontStylesView: React.FC<FontStylesViewProps> = ({
   // Fallback text if user cleared input
   const displayText = deferredInput.trim() || 'Restyle Text';
 
-  // Filter styles based on category, search, and favorites
+  // Filter styles based on category and search
   const filteredStyles = useMemo(() => {
     const query = deferredSearch.trim().toLowerCase();
     return fontStyles.filter((style) => {
-      // Favorites filter
-      if (showFavoritesOnly && !favorites.includes(style.id)) {
-        return false;
-      }
       // Subcategory filter
       if (selectedSubcat !== 'all' && style.category !== selectedSubcat) {
         return false;
@@ -199,7 +166,7 @@ export const FontStylesView: React.FC<FontStylesViewProps> = ({
       }
       return true;
     });
-  }, [fontStyles, selectedSubcat, deferredSearch, favorites, showFavoritesOnly]);
+  }, [fontStyles, selectedSubcat, deferredSearch]);
 
   const handleCopyCard = useCallback((style: FontStyleItem, formattedOutput: string) => {
     onCopy(formattedOutput, style.name);
@@ -360,11 +327,9 @@ export const FontStylesView: React.FC<FontStylesViewProps> = ({
               displayText={displayText}
               prefix={prefix}
               suffix={suffix}
-              isFav={favorites.includes(style.id)}
               isCopied={copiedId === style.id}
               previewTextSizeClass={previewTextSizeClass}
               onCopyCard={handleCopyCard}
-              onToggleFav={toggleFavorite}
             />
           ))}
         </div>

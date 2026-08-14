@@ -1,5 +1,5 @@
 import React from 'react';
-import { Volume2, VolumeX, Palette, Heart, Info } from 'lucide-react';
+import { Volume2, VolumeX, Palette, Info, Heart } from 'lucide-react';
 import { MainTab, ThemePreset } from '../types';
 import { BrandLogo } from './BrandLogo';
 
@@ -10,9 +10,6 @@ interface HeaderProps {
   setTheme: (theme: ThemePreset) => void;
   soundEnabled: boolean;
   setSoundEnabled: (enabled: boolean) => void;
-  favoritesCount: number;
-  showFavoritesOnly: boolean;
-  setShowFavoritesOnly: (val: boolean) => void;
   totalFontsCount?: number;
   totalSymbolsCount?: number;
   onOpenInfo: () => void;
@@ -34,9 +31,6 @@ export const Header: React.FC<HeaderProps> = ({
   setTheme,
   soundEnabled,
   setSoundEnabled,
-  favoritesCount,
-  showFavoritesOnly,
-  setShowFavoritesOnly,
   totalFontsCount = 0,
   totalSymbolsCount = 0,
   onOpenInfo,
@@ -140,28 +134,6 @@ export const Header: React.FC<HeaderProps> = ({
               {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
             </button>
 
-            {/* Favorites Toggle */}
-            <button
-              id="btn-favorites-filter"
-              type="button"
-              onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
-              className={`px-2.5 py-2 rounded-xl transition flex items-center gap-1.5 text-xs font-semibold ${
-                showFavoritesOnly
-                  ? 'bg-rose-500/30 text-rose-200 border border-rose-400/40 shadow-lg shadow-rose-500/20'
-                  : 'liquid-glass-pill text-slate-300 hover:text-white hover:bg-white/15'
-              }`}
-              title="Filter Favorite Items"
-              aria-label="Show Favorites"
-            >
-              <Heart className={`w-4 h-4 ${showFavoritesOnly ? 'fill-rose-400 text-rose-400' : ''}`} />
-              <span className="hidden sm:inline">Favorites</span>
-              {favoritesCount > 0 && (
-                <span className="min-w-[18px] h-4 px-1.5 text-[10px] rounded-full bg-rose-500/50 text-rose-100 font-bold leading-none inline-flex items-center justify-center shadow-sm">
-                  {favoritesCount}
-                </span>
-              )}
-            </button>
-
             {/* Info / About Button */}
             <button
               id="btn-info-modal"
@@ -199,12 +171,9 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               id="tab-fonts-btn"
               type="button"
-              onClick={() => {
-                setActiveTab('fonts');
-                if (showFavoritesOnly) setShowFavoritesOnly(false);
-              }}
+              onClick={() => setActiveTab('fonts')}
               className={`py-2 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-bold tracking-wide transition-all duration-200 flex items-center justify-center gap-1.5 sm:gap-2 ${
-                activeTab === 'fonts' && !showFavoritesOnly
+                activeTab === 'fonts'
                   ? 'liquid-glass-pill-active text-white shadow-lg'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
               }`}
@@ -221,12 +190,9 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               id="tab-symbols-btn"
               type="button"
-              onClick={() => {
-                setActiveTab('symbols');
-                if (showFavoritesOnly) setShowFavoritesOnly(false);
-              }}
+              onClick={() => setActiveTab('symbols')}
               className={`py-2 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-bold tracking-wide transition-all duration-200 flex items-center justify-center gap-1.5 sm:gap-2 ${
-                activeTab === 'symbols' && !showFavoritesOnly
+                activeTab === 'symbols'
                   ? 'liquid-glass-pill-active text-white shadow-lg'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
               }`}

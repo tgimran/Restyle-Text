@@ -37,7 +37,6 @@ export default function App() {
     return 'aurora-emerald';
   });
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
-  const [showFavoritesOnly, setShowFavoritesOnly] = useState<boolean>(false);
   const [isInfoOpen, setIsInfoOpen] = useState<boolean>(false);
   const [isSupportOpen, setIsSupportOpen] = useState<boolean>(false);
   const [toast, setToast] = useState<ToastInfo | null>(null);
@@ -50,33 +49,6 @@ export default function App() {
       // Ignore
     }
   }, [theme]);
-
-  // LocalStorage favorites
-  const [favorites, setFavorites] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('restyle_text_favs');
-      return saved ? JSON.parse(saved) : ['bold-sans', 'script-bold', 'fraktur-normal', 's-30', 'h-8', 'k-1'];
-    } catch {
-      return ['bold-sans', 'script-bold', 'fraktur-normal', 's-30', 'h-8', 'k-1'];
-    }
-  });
-
-  // Persist favorites
-  useEffect(() => {
-    try {
-      localStorage.setItem('restyle_text_favs', JSON.stringify(favorites));
-    } catch {
-      // Ignore
-    }
-  }, [favorites]);
-
-  // Toggle favorite
-  const toggleFavorite = useCallback((id: string) => {
-    playClickSound(soundEnabled);
-    setFavorites((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
-  }, [soundEnabled]);
 
   // One-tap copy handler
   const handleCopy = useCallback(async (textToCopy: string, label: string) => {
@@ -161,9 +133,6 @@ export default function App() {
         }}
         soundEnabled={soundEnabled}
         setSoundEnabled={setSoundEnabled}
-        favoritesCount={favorites.length}
-        showFavoritesOnly={showFavoritesOnly}
-        setShowFavoritesOnly={setShowFavoritesOnly}
         totalFontsCount={FONT_STYLES.length}
         totalSymbolsCount={SYMBOLS_DATA.length}
         onOpenInfo={() => {
@@ -196,18 +165,12 @@ export default function App() {
             prefix={prefix}
             suffix={suffix}
             fontStyles={FONT_STYLES}
-            favorites={favorites}
-            toggleFavorite={toggleFavorite}
             onCopy={handleCopy}
-            showFavoritesOnly={showFavoritesOnly}
           />
         ) : (
           <SymbolsView
             symbols={SYMBOLS_DATA}
-            favorites={favorites}
-            toggleFavorite={toggleFavorite}
             onCopy={handleCopy}
-            showFavoritesOnly={showFavoritesOnly}
           />
         )}
       </main>

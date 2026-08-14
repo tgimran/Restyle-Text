@@ -1,0 +1,6 @@
+{
+  "name": "Restyle Text",
+  "description": "A stylish iOS liquid glass Unicode font styler, Symbols & Emoji dictionary, and cool text transformer by GW IMRAN.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

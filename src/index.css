@@ -1,0 +1,143 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* Glassmorphism system optimized for 60/120fps performance */
+.liquid-glass {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.28), inset 0 1px 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* Optimized Card Glass - Crystal specular look without expensive multi-card backdrop-filter overdraw */
+.liquid-glass-card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 10px 24px -10px rgba(0, 0, 0, 0.35), inset 0 1px 0 0 rgba(255, 255, 255, 0.22);
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+}
+
+.liquid-glass-card:hover {
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(255, 255, 255, 0.28);
+  transform: translate3d(0, -2px, 0) scale(1.008);
+  box-shadow: 0 16px 32px -8px rgba(0, 0, 0, 0.45), inset 0 1px 0 0 rgba(255, 255, 255, 0.38);
+}
+
+.liquid-glass-card:active {
+  transform: translate3d(0, 0, 0) scale(0.99);
+}
+
+.liquid-glass-input {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 12px 36px 0 rgba(0, 0, 0, 0.25), inset 0 2px 4px 0 rgba(0, 0, 0, 0.12), inset 0 1px 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.liquid-glass-pill {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 2px 6px 0 rgba(0, 0, 0, 0.12), inset 0 1px 0 0 rgba(255, 255, 255, 0.2);
+  transition: transform 0.15s ease, background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.liquid-glass-pill-active {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.16) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.48);
+  box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.2), inset 0 1px 2px 0 rgba(255, 255, 255, 0.5), inset 0 0 10px 0 rgba(255, 255, 255, 0.18);
+}
+
+/* Fluid Blob Animations using GPU translate3d */
+@keyframes blob-float-1 {
+  0%, 100% {
+    transform: translate3d(0px, 0px, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(30px, -50px, 0) scale(1.08);
+  }
+  66% {
+    transform: translate3d(-20px, 20px, 0) scale(0.96);
+  }
+}
+
+@keyframes blob-float-2 {
+  0%, 100% {
+    transform: translate3d(0px, 0px, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(-40px, 40px, 0) scale(1.1);
+  }
+  66% {
+    transform: translate3d(25px, -30px, 0) scale(0.92);
+  }
+}
+
+@keyframes blob-float-3 {
+  0%, 100% {
+    transform: translate3d(0px, 0px, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(35px, 35px, 0) scale(1.06);
+  }
+}
+
+.animate-blob-1 {
+  animation: blob-float-1 22s ease-in-out infinite;
+  will-change: transform;
+}
+
+.animate-blob-2 {
+  animation: blob-float-2 26s ease-in-out infinite;
+  will-change: transform;
+}
+
+.animate-blob-3 {
+  animation: blob-float-3 30s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* Rendering performance optimization for grid cards */
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+  background-clip: content-box;
+}
+

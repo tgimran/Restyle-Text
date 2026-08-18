@@ -15,8 +15,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Razorpay credentials (server-side only)
-const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_test_TR2rqnK2GzVeMV';
-const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'AjgqW2cURfFFmo51gRnRPLwV';
+const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_live_TR5hdiKyXsnfNP';
+const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || '5uf4sfFi6sKsNBfhsGCZh6a7';
 
 // Initialize Razorpay instance lazily / safely
 let razorpayInstance: Razorpay | null = null;

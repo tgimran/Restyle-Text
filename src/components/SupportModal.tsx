@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, CheckCircle2, AlertCircle, RefreshCw, Lock, Wallet, Heart, ShieldCheck } from 'lucide-react';
+import { X, CheckCircle2, AlertCircle, RefreshCw, Lock, Wallet, Heart, ShieldCheck, ExternalLink } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface SupportModalProps {
@@ -136,14 +136,27 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
       }
 
       // 3. Configure official Razorpay Checkout options
+      const logoUrl = typeof window !== 'undefined' 
+        ? `${window.location.origin}/src/assets/images/restyle_text_logo_1786683673519.jpg`
+        : '';
+
       const options = {
         key: orderData.keyId,
         amount: orderData.amount,
         currency: orderData.currency || 'INR',
         name: 'Restyle Text',
         description: `Support Restyle Text (₹${finalAmount})`,
-        image: '/src/assets/images/restyle_text_logo_1786683673519.jpg',
+        image: logoUrl,
         order_id: orderData.orderId,
+        prefill: {
+          name: '',
+          email: '',
+          contact: '',
+        },
+        retry: {
+          enabled: true,
+          max_count: 3,
+        },
         handler: async (response: {
           razorpay_payment_id: string;
           razorpay_order_id: string;
@@ -179,6 +192,8 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
             // If user closed the Razorpay popup without completing
             setStatus((prev) => (prev === 'processing' ? 'cancelled' : prev));
           },
+          escape: true,
+          backdropclose: false,
         },
         theme: {
           color: '#e11d48', // iOS rose theme
@@ -188,10 +203,15 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
       // 4. Open Razorpay Checkout Dialog
       const rzp = new (window as any).Razorpay(options);
       rzp.on('payment.failed', (response: any) => {
+        console.error('Razorpay payment.failed event:', response);
         setStatus('failed');
-        setErrorMessage(
-          response?.error?.description || 'Payment was declined or failed by bank.'
-        );
+        const errObj = response?.error || {};
+        const reason =
+          errObj.description ||
+          errObj.reason ||
+          errObj.message ||
+          'Payment was declined or cancelled. Please check your payment details or try another method.';
+        setErrorMessage(reason);
       });
 
       rzp.open();
@@ -382,10 +402,12 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
               )}
             </button>
 
-            {/* Razorpay Trust Badge */}
-            <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400/90">
-              <Lock className="w-3 h-3 text-emerald-400" />
-              <span>Official Razorpay Checkout • UPI & Cards</span>
+            {/* Razorpay Trust Badge & Iframe note */}
+            <div className="flex flex-col items-center justify-center gap-1 text-[11px] text-slate-400/90">
+              <div className="flex items-center gap-1.5">
+                <Lock className="w-3 h-3 text-emerald-400" />
+                <span>Official Razorpay Checkout • UPI & Cards</span>
+              </div>
             </div>
           </div>
         )}

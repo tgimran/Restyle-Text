@@ -1,90 +1,48 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { X, Copy, Check, Heart, ExternalLink, Sparkles, ShieldCheck, QrCode } from 'lucide-react';
-import QRCode from 'qrcode';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, CheckCircle2, AlertCircle, RefreshCw, Lock, Wallet, Heart, ShieldCheck } from 'lucide-react';
+import confetti from 'canvas-confetti';
 
 interface SupportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  upiId?: string;
-  payeeName?: string;
 }
 
-export const SupportModal: React.FC<SupportModalProps> = ({
-  isOpen,
-  onClose,
-  upiId = '9334078582@ybl',
-  payeeName = 'GW IMRAN',
-}) => {
-  const [copied, setCopied] = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+type PaymentStatus = 'idle' | 'processing' | 'success' | 'cancelled' | 'failed';
 
-  const upiUrl = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(payeeName)}&cu=INR`;
+const PRESET_AMOUNTS = [15, 50, 500];
 
-  // Draw high-resolution QR code with PhonePe center logo
+export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) => {
+  const [selectedAmount, setSelectedAmount] = useState<number>(50);
+  const [customAmount, setCustomAmount] = useState<string>('');
+  const [isCustom, setIsCustom] = useState<boolean>(false);
+  const [status, setStatus] = useState<PaymentStatus>('idle');
+  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [paymentDetails, setPaymentDetails] = useState<{ paymentId?: string; amount?: number }>({});
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Reset state on open
   useEffect(() => {
-    if (!isOpen) return;
+    if (isOpen) {
+      setStatus('idle');
+      setErrorMessage('');
+      setSelectedAmount(50);
+      setCustomAmount('');
+      setIsCustom(false);
+    }
+  }, [isOpen]);
 
-    const generateQR = async () => {
-      if (!canvasRef.current) return;
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      const size = 320;
-      canvas.width = size;
-      canvas.height = size;
-
-      // Generate QR code onto the canvas with High Error Correction
-      await QRCode.toCanvas(canvas, upiUrl, {
-        width: size,
-        margin: 2,
-        errorCorrectionLevel: 'H',
-        color: {
-          dark: '#000000',
-          light: '#ffffff',
-        },
-      });
-
-      // Draw PhonePe Center Icon
-      const centerX = size / 2;
-      const centerY = size / 2;
-      const radius = 38;
-
-      // Outer white ring
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, radius + 4, 0, 2 * Math.PI, false);
-      ctx.fillStyle = '#ffffff';
-      ctx.fill();
-
-      // Inner Dark circle (matching the reference image)
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI, false);
-      ctx.fillStyle = '#1e1e1e';
-      ctx.fill();
-
-      // Draw Hindi 'पे' text in center
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 36px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('पे', centerX, centerY - 2);
-    };
-
-    generateQR();
-  }, [isOpen, upiUrl]);
-
-  // Handle escape key
+  // Handle Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
+      if (e.key === 'Escape' && isOpen && status !== 'processing') {
         onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, status]);
 
-  // Prevent body scroll
+  // Prevent background scroll
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -96,178 +54,454 @@ export const SupportModal: React.FC<SupportModalProps> = ({
     };
   }, [isOpen]);
 
-  const handleCopyUPI = async () => {
+  // Trigger celebration confetti on payment success
+  const triggerSuccessCelebration = () => {
     try {
-      await navigator.clipboard.writeText(upiId);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
+      confetti({
+        particleCount: 80,
+        spread: 65,
+        origin: { y: 0.6 },
+        colors: ['#f43f5e', '#ec4899', '#f59e0b', '#10b981', '#6366f1'],
+      });
     } catch {
-      // Fallback
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
+      // Confetti fallback
     }
+  };
+
+  // Preset Selection
+  const handlePresetSelect = (amt: number) => {
+    if (status === 'processing') return;
+    setSelectedAmount(amt);
+    setIsCustom(false);
+    setCustomAmount('');
+  };
+
+  // Custom Amount Input Handler
+  const handleCustomChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (status === 'processing') return;
+    const val = e.target.value;
+    setCustomAmount(val);
+    setIsCustom(true);
+    const parsed = parseFloat(val);
+    if (!isNaN(parsed) && parsed > 0) {
+      setSelectedAmount(parsed);
+    }
+  };
+
+  // Ensure Razorpay Checkout script is loaded
+  const loadRazorpayScript = (): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if ((window as any).Razorpay) {
+        resolve(true);
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
+  // Initiate Razorpay Checkout Flow
+  const handleContinueToPay = async () => {
+    // Validate effective amount
+    const finalAmount = isCustom ? parseFloat(customAmount) : selectedAmount;
+    if (!finalAmount || isNaN(finalAmount) || finalAmount < 1) {
+      setErrorMessage('Please enter a valid amount (Minimum ₹1)');
+      return;
+    }
+
+    setErrorMessage('');
+    setStatus('processing');
+
+    try {
+      // 1. Ensure Razorpay client script is present
+      const isLoaded = await loadRazorpayScript();
+      if (!isLoaded || !(window as any).Razorpay) {
+        throw new Error('Razorpay SDK could not be loaded. Please check your internet connection.');
+      }
+
+      // 2. Request backend order creation
+      const res = await fetch('/api/payment/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: finalAmount }),
+      });
+
+      const orderData = await res.json();
+      if (!res.ok || !orderData.success) {
+        throw new Error(orderData.error || 'Failed to initialize payment order.');
+      }
+
+      // 3. Configure official Razorpay Checkout options
+      const options = {
+        key: orderData.keyId,
+        amount: orderData.amount,
+        currency: orderData.currency || 'INR',
+        name: 'Restyle Text',
+        description: `Support Restyle Text (₹${finalAmount})`,
+        image: '/src/assets/images/restyle_text_logo_1786683673519.jpg',
+        order_id: orderData.orderId,
+        handler: async (response: {
+          razorpay_payment_id: string;
+          razorpay_order_id: string;
+          razorpay_signature: string;
+        }) => {
+          try {
+            // Verify payment signature on backend
+            const verifyRes = await fetch('/api/payment/verify-payment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(response),
+            });
+
+            const verifyData = await verifyRes.json();
+            if (verifyRes.ok && verifyData.verified) {
+              setPaymentDetails({
+                paymentId: response.razorpay_payment_id,
+                amount: finalAmount,
+              });
+              setStatus('success');
+              triggerSuccessCelebration();
+            } else {
+              setStatus('failed');
+              setErrorMessage(verifyData.error || 'Signature verification failed.');
+            }
+          } catch (err: any) {
+            setStatus('failed');
+            setErrorMessage(err?.message || 'Payment verification encountered an issue.');
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            // If user closed the Razorpay popup without completing
+            setStatus((prev) => (prev === 'processing' ? 'cancelled' : prev));
+          },
+        },
+        theme: {
+          color: '#e11d48', // iOS rose theme
+        },
+      };
+
+      // 4. Open Razorpay Checkout Dialog
+      const rzp = new (window as any).Razorpay(options);
+      rzp.on('payment.failed', (response: any) => {
+        setStatus('failed');
+        setErrorMessage(
+          response?.error?.description || 'Payment was declined or failed by bank.'
+        );
+      });
+
+      rzp.open();
+    } catch (err: any) {
+      console.error('Payment Error:', err);
+      setStatus('failed');
+      setErrorMessage(err?.message || 'Unable to connect to payment gateway. Please try again.');
+    }
+  };
+
+  const handleTryAgain = () => {
+    setStatus('idle');
+    setErrorMessage('');
   };
 
   if (!isOpen) return null;
 
+  const currentAmountDisplay = isCustom
+    ? parseFloat(customAmount) || 0
+    : selectedAmount;
+
   return (
     <div
       id="support-modal-backdrop"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/75 backdrop-blur-xl animate-in fade-in duration-200"
-      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center p-3.5 sm:p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200"
+      onClick={() => {
+        if (status !== 'processing') onClose();
+      }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="support-modal-title"
     >
+      {/* Mini iOS-Inspired Card */}
       <div
-        id="support-modal-card"
-        className="relative w-full max-w-md max-h-[92vh] overflow-y-auto liquid-glass rounded-3xl p-6 sm:p-7 shadow-2xl border border-white/25 text-white flex flex-col gap-5 animate-in zoom-in-95 duration-200"
+        id="support-payment-card"
+        className="relative w-full max-w-[340px] sm:max-w-[360px] bg-slate-900/90 text-white rounded-[26px] p-5 sm:p-6 shadow-2xl border border-white/15 backdrop-blur-2xl transition-all duration-200 select-none animate-in zoom-in-95"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Top Decorative Glow */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-1 bg-gradient-to-r from-transparent via-amber-400 to-transparent opacity-80" />
+        {/* Subtle iOS Card Top Ambient Bar */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-1 bg-gradient-to-r from-transparent via-pink-400 to-transparent opacity-60 rounded-full" />
 
-        {/* Header with Title & Close Button */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-400 via-pink-500 to-purple-600 p-[1px] shadow-lg shadow-pink-500/30 shrink-0 flex items-center justify-center">
-              <div className="w-full h-full rounded-[15px] bg-slate-950/85 backdrop-blur-md flex items-center justify-center">
-                <Heart className="w-5 h-5 text-pink-400 fill-pink-400/30 animate-pulse" />
-              </div>
-            </div>
-            <div>
-              <h2
-                id="support-modal-title"
-                className="text-lg sm:text-xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-pink-100 to-amber-200"
+        {/* 1. IDLE & PROCESSING STATES */}
+        {(status === 'idle' || status === 'processing') && (
+          <div className="flex flex-col gap-4">
+            {/* Header */}
+            <div className="relative flex flex-col items-center text-center gap-2.5 pt-1">
+              {/* Top-Left Wallet Icon */}
+              <div
+                className="absolute -top-1 -left-1 p-1.5 rounded-full text-pink-400 bg-pink-500/10 border border-pink-400/20 shadow-sm flex items-center justify-center"
+                title="Contribution Wallet"
+                aria-label="Wallet icon"
               >
-                Support Developer
-              </h2>
-              <p className="text-xs text-slate-300/80 font-medium mt-0.5">
-                Restyle Text by GW IMRAN
-              </p>
-            </div>
-          </div>
-
-          <button
-            id="btn-close-support-modal"
-            type="button"
-            onClick={onClose}
-            className="p-2 rounded-xl liquid-glass-pill text-slate-300 hover:text-white hover:bg-white/20 transition shrink-0"
-            aria-label="Close support dialog"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* QR Code Container */}
-        <div className="flex flex-col items-center gap-3.5 bg-black/40 border border-white/10 rounded-2xl p-4 sm:p-5 shadow-inner">
-          <div className="relative p-2.5 bg-white rounded-2xl shadow-xl border-2 border-white/40">
-            <canvas
-              ref={canvasRef}
-              className="w-52 h-52 sm:w-60 sm:h-60 rounded-xl select-none mx-auto block"
-            />
-          </div>
-
-          {/* 4 Payment App Logos */}
-          <div className="w-full flex flex-col items-center gap-2 pt-1">
-            <div className="flex items-center justify-center gap-4 sm:gap-6 flex-wrap">
-              {/* PhonePe */}
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/5 border border-white/10 text-[11px] font-semibold text-purple-200 shadow-sm" title="PhonePe">
-                <div className="w-5 h-5 rounded-full bg-[#5f259f] flex items-center justify-center text-white font-bold text-[11px]">
-                  पे
-                </div>
-                <span>PhonePe</span>
+                <Wallet className="w-3.5 h-3.5" />
               </div>
 
-              {/* Google Pay */}
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/5 border border-white/10 text-[11px] font-semibold text-blue-200 shadow-sm" title="Google Pay">
-                <svg className="w-5 h-5" viewBox="0 0 48 48">
-                  <path fill="#4285F4" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                  <path fill="#34A853" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                  <path fill="#EA4335" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-                </svg>
-                <span>Google Pay</span>
+              {/* Top-Right Close Button */}
+              <button
+                id="btn-close-payment-modal"
+                type="button"
+                onClick={onClose}
+                disabled={status === 'processing'}
+                className="absolute -top-1 -right-1 p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition active:scale-95 disabled:opacity-30"
+                aria-label="Close dialog"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="w-10 h-10 rounded-2xl bg-pink-500/20 border border-pink-400/30 flex items-center justify-center text-pink-400 shadow-md shadow-pink-500/10">
+                <Heart className="w-5 h-5 fill-pink-400/40 animate-pulse" />
               </div>
 
-              {/* Paytm */}
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/5 border border-white/10 text-[11px] font-semibold text-cyan-200 shadow-sm" title="Paytm">
-                <div className="w-5 h-5 rounded-md bg-[#002e6e] flex items-center justify-center text-[#00baf2] font-black text-[9px] tracking-tighter">
-                  Pay
-                </div>
-                <span>Paytm</span>
-              </div>
-
-              {/* BHIM UPI */}
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/5 border border-white/10 text-[11px] font-semibold text-emerald-200 shadow-sm" title="BHIM UPI">
-                <div className="w-5 h-5 rounded-md bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white font-extrabold text-[8px] tracking-tight">
-                  UPI
-                </div>
-                <span>BHIM UPI</span>
+              <div className="flex flex-col items-center space-y-1">
+                <h2
+                  id="support-modal-title"
+                  className="text-base sm:text-lg font-bold tracking-tight text-white flex items-center justify-center gap-1.5 leading-snug"
+                >
+                  <span>♥️ Support Restyle Text ♥️</span>
+                </h2>
+                <p className="text-xs text-slate-300/90 font-medium leading-relaxed max-w-[280px]">
+                  ♥️ Thank you for supporting Restyle Text ♥️
+                </p>
               </div>
             </div>
 
-            {/* Subtext */}
-            <p className="text-[11px] text-slate-300 font-medium text-center tracking-wide mt-0.5">
-              PhonePe • Google Pay • Paytm • BHIM UPI
-            </p>
-          </div>
-        </div>
+            {/* iOS Segmented Preset Pills: [₹15] [₹50] [₹500] */}
+            <div className="flex items-center justify-between gap-2 p-1 bg-black/40 rounded-2xl border border-white/10">
+              {PRESET_AMOUNTS.map((amt) => {
+                const isSelected = !isCustom && selectedAmount === amt;
+                return (
+                  <button
+                    key={amt}
+                    type="button"
+                    id={`btn-preset-amt-${amt}`}
+                    onClick={() => handlePresetSelect(amt)}
+                    disabled={status === 'processing'}
+                    className={`flex-1 py-2.5 rounded-xl text-xs sm:text-sm font-bold tracking-tight transition-all duration-150 active:scale-[0.96] flex items-center justify-center ${
+                      isSelected
+                        ? 'bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 text-white shadow-md shadow-pink-500/30 ring-1 ring-white/30'
+                        : 'text-slate-300 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    ₹{amt}
+                  </button>
+                );
+              })}
+            </div>
 
-        {/* UPI ID Copy Field */}
-        <div className="flex flex-col gap-2">
-          <label className="text-xs text-slate-300 font-semibold flex items-center justify-between">
-            <span>UPI ID</span>
-            <span className="text-[11px] text-pink-300 font-normal">Scan QR or Copy ID</span>
-          </label>
-          <div className="flex items-center gap-2 p-2 rounded-2xl bg-black/40 border border-white/15">
-            <input
-              type="text"
-              readOnly
-              value={upiId}
-              className="w-full bg-transparent text-sm font-mono font-bold text-white px-2 focus:outline-none select-all"
-            />
+            {/* Custom Amount Section */}
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor="custom-amount-input"
+                className="text-[11px] font-semibold text-slate-300/90 tracking-wide flex items-center justify-between"
+              >
+                <span>Custom amount</span>
+                {isCustom && customAmount && (
+                  <span className="text-[10px] text-pink-300 font-medium">
+                    Selected: ₹{currentAmountDisplay}
+                  </span>
+                )}
+              </label>
+
+              <div
+                className={`relative flex items-center bg-black/40 border rounded-2xl px-3 py-2.5 transition-all duration-150 ${
+                  isCustom && customAmount
+                    ? 'border-pink-400/60 ring-2 ring-pink-500/20 bg-black/60'
+                    : 'border-white/15 hover:border-white/25 focus-within:border-pink-400/60 focus-within:ring-2 focus-within:ring-pink-500/20'
+                }`}
+              >
+                <span className="text-base font-bold text-slate-400 mr-2 select-none">
+                  ₹
+                </span>
+                <input
+                  id="custom-amount-input"
+                  ref={inputRef}
+                  type="number"
+                  inputMode="decimal"
+                  min="1"
+                  max="50000"
+                  placeholder="Enter custom amount"
+                  value={customAmount}
+                  onChange={handleCustomChange}
+                  disabled={status === 'processing'}
+                  aria-label="Custom payment amount"
+                  className="w-full bg-transparent text-sm sm:text-base font-semibold text-white placeholder:text-slate-500 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+                {customAmount && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomAmount('');
+                      setIsCustom(false);
+                      setSelectedAmount(50);
+                    }}
+                    className="p-1 text-slate-400 hover:text-white text-xs"
+                    aria-label="Clear custom amount"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Error Message if any */}
+            {errorMessage && (
+              <div className="p-2.5 rounded-xl bg-rose-500/20 border border-rose-400/30 text-rose-200 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span className="leading-tight">{errorMessage}</span>
+              </div>
+            )}
+
+            {/* Continue to Pay Action Button */}
             <button
-              id="btn-copy-upi"
+              id="btn-continue-to-pay"
               type="button"
-              onClick={handleCopyUPI}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
-                copied
-                  ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
-                  : 'liquid-glass-pill text-white hover:bg-white/25'
-              }`}
+              onClick={handleContinueToPay}
+              disabled={status === 'processing' || currentAmountDisplay < 1}
+              className="w-full min-h-[46px] py-3 px-4 rounded-2xl bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 hover:opacity-95 text-white font-bold text-sm tracking-wide shadow-lg shadow-rose-500/25 active:scale-[0.98] transition-all duration-150 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
             >
-              {copied ? (
+              {status === 'processing' ? (
                 <>
-                  <Check className="w-4 h-4" />
-                  <span>Copied!</span>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Processing…</span>
                 </>
               ) : (
-                <>
-                  <Copy className="w-4 h-4" />
-                  <span>Copy</span>
-                </>
+                <span>
+                  Continue to Pay {currentAmountDisplay > 0 ? `• ₹${currentAmountDisplay}` : ''}
+                </span>
               )}
             </button>
+
+            {/* Razorpay Trust Badge */}
+            <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400/90">
+              <Lock className="w-3 h-3 text-emerald-400" />
+              <span>Official Razorpay Checkout • UPI & Cards</span>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Action Button: Pay via UPI Apps directly */}
-        <a
-          id="btn-pay-upi-intent"
-          href={upiUrl}
-          className="w-full py-3 rounded-2xl bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-600 hover:from-pink-400 hover:via-purple-500 hover:to-indigo-500 text-white font-bold text-sm text-center shadow-lg shadow-purple-600/30 hover:shadow-purple-600/50 transition flex items-center justify-center gap-2"
-        >
-          <Sparkles className="w-4 h-4 text-amber-300" />
-          <span>Pay via UPI App</span>
-          <ExternalLink className="w-4 h-4 opacity-80" />
-        </a>
+        {/* 2. SUCCESS STATE */}
+        {status === 'success' && (
+          <div className="flex flex-col items-center text-center gap-4 py-2 animate-in zoom-in-95">
+            <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/20">
+              <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+            </div>
 
-        {/* Footer Note */}
-        <div className="text-center pt-1 border-t border-white/10 flex items-center justify-center gap-1.5 text-xs text-slate-300">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Thank you for supporting <strong>GW IMRAN</strong>!</span>
-        </div>
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 font-bold text-xs">
+                ✓ Payment Successful
+              </div>
+              <h3 className="text-base sm:text-lg font-bold text-white mt-2">
+                You’re awesome!
+              </h3>
+              <p className="text-sm font-extrabold text-pink-300">
+                Thanks for supporting Restyle Text ♥️
+              </p>
+            </div>
+
+            {paymentDetails.amount && (
+              <div className="w-full bg-black/30 border border-white/10 rounded-2xl p-3 text-xs space-y-1">
+                <div className="flex justify-between text-slate-300">
+                  <span>Contribution Amount:</span>
+                  <strong className="text-white font-bold">₹{paymentDetails.amount}</strong>
+                </div>
+                {paymentDetails.paymentId && (
+                  <div className="flex justify-between text-slate-400 text-[10px]">
+                    <span>Payment ID:</span>
+                    <span className="font-mono text-slate-300">{paymentDetails.paymentId}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button
+              id="btn-payment-success-close"
+              type="button"
+              onClick={onClose}
+              className="w-full py-2.5 rounded-2xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold transition active:scale-95"
+            >
+              Done
+            </button>
+          </div>
+        )}
+
+        {/* 3. CANCELLED STATE */}
+        {status === 'cancelled' && (
+          <div className="flex flex-col items-center text-center gap-3.5 py-2 animate-in zoom-in-95">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-400/30 flex items-center justify-center text-amber-400">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-white">Payment cancelled</h3>
+              <p className="text-xs text-slate-300/80 max-w-[240px]">
+                No amount was charged. You can try again whenever you are ready.
+              </p>
+            </div>
+
+            <div className="w-full flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 text-xs font-semibold transition active:scale-95"
+              >
+                Close
+              </button>
+              <button
+                id="btn-payment-cancelled-retry"
+                type="button"
+                onClick={handleTryAgain}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 hover:opacity-95 text-white text-xs font-bold shadow-md transition active:scale-95"
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 4. FAILED STATE */}
+        {status === 'failed' && (
+          <div className="flex flex-col items-center text-center gap-3.5 py-2 animate-in zoom-in-95">
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-400/30 flex items-center justify-center text-rose-400">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-white">Payment failed</h3>
+              <p className="text-xs text-slate-300/80 max-w-[240px]">
+                {errorMessage || 'Something went wrong with the transaction. Please try again.'}
+              </p>
+            </div>
+
+            <div className="w-full flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 text-xs font-semibold transition active:scale-95"
+              >
+                Close
+              </button>
+              <button
+                id="btn-payment-failed-retry"
+                type="button"
+                onClick={handleTryAgain}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 hover:opacity-95 text-white text-xs font-bold shadow-md transition active:scale-95"
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

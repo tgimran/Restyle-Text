@@ -195,12 +195,10 @@ export default function App() {
         }}
       />
 
-      {/* Support Developer (UPI QR & App Logos) Modal */}
+      {/* Support Restyle Text Mini iOS Razorpay Modal */}
       <SupportModal
         isOpen={isSupportOpen}
         onClose={() => setIsSupportOpen(false)}
-        upiId="9334078582@ybl"
-        payeeName="GW IMRAN"
       />
     </div>
   );

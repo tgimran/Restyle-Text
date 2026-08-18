@@ -149,7 +149,7 @@ export const InfoModal: React.FC<InfoModalProps> = ({
               className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-amber-200 hover:text-white rounded-2xl bg-gradient-to-r from-amber-500/20 via-pink-500/25 to-purple-500/20 border border-amber-400/40 hover:border-amber-300 transition shadow-lg shadow-amber-500/10 hover:shadow-amber-500/25 active:scale-95"
             >
               <Heart className="w-3.5 h-3.5 text-amber-300 fill-amber-300/40 animate-pulse" />
-              <span>Support Developer with UPI / QR</span>
+              <span>Support Restyle Text ❤️</span>
             </button>
           )}
 

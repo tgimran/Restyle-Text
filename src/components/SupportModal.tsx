@@ -130,7 +130,19 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
         body: JSON.stringify({ amount: finalAmount }),
       });
 
-      const orderData = await res.json();
+      let orderData: any = {};
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        orderData = await res.json();
+      } else {
+        const rawText = await res.text();
+        throw new Error(
+          res.status === 502 || res.status === 503 || rawText.includes('starting')
+            ? 'Server is warming up. Please try again in 5 seconds.'
+            : 'Unable to reach payment service. Please try again.'
+        );
+      }
+
       if (!res.ok || !orderData.success) {
         throw new Error(orderData.error || 'Failed to initialize payment order.');
       }
@@ -170,7 +182,14 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
               body: JSON.stringify(response),
             });
 
-            const verifyData = await verifyRes.json();
+            let verifyData: any = {};
+            const verifyContentType = verifyRes.headers.get('content-type') || '';
+            if (verifyContentType.includes('application/json')) {
+              verifyData = await verifyRes.json();
+            } else {
+              throw new Error('Payment verification server returned unexpected response.');
+            }
+
             if (verifyRes.ok && verifyData.verified) {
               setPaymentDetails({
                 paymentId: response.razorpay_payment_id,

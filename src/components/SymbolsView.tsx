@@ -228,7 +228,7 @@ export const SymbolsView: React.FC<SymbolsViewProps> = ({
   }, [symbolSize]);
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 pb-20">
+    <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 pb-6">
       {/* Subcategories & Search */}
       <div className="flex flex-col gap-3 mb-4">
         {/* Horizontal scrollable subcategory badges with accurate mini counts */}

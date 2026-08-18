@@ -175,6 +175,17 @@ export default function App() {
         )}
       </main>
 
+      {/* Decorative Atom Divider */}
+      <div
+        id="decorative-atom-divider"
+        className="w-full flex items-center justify-center text-center -mt-2 mb-2 py-1 px-4 select-none overflow-x-auto scrollbar-none"
+        aria-hidden="true"
+      >
+        <span className="text-xs sm:text-sm md:text-base font-mono tracking-wider text-pink-300/80 drop-shadow-[0_0_10px_rgba(244,114,182,0.4)] whitespace-nowrap opacity-90 inline-block text-center leading-none">
+          ⚛───────────⚛────────────⚛────────────⚛────────────⚛
+        </span>
+      </div>
+
       {/* Glassmorphic Footer */}
       <Footer
         onOpenSupport={() => {

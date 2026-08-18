@@ -8,7 +8,7 @@ interface FooterProps {
 
 export const Footer: React.FC<FooterProps> = ({ onOpenSupport }) => {
   return (
-    <footer className="w-full px-4 sm:px-6 pt-8 pb-12 mt-auto">
+    <footer className="w-full px-4 sm:px-6 pt-1 pb-10 mt-auto">
       <div
         id="app-footer"
         className="max-w-6xl mx-auto liquid-glass rounded-3xl p-6 sm:p-8 text-center flex flex-col items-center gap-6 shadow-2xl relative overflow-hidden"
@@ -127,7 +127,7 @@ export const Footer: React.FC<FooterProps> = ({ onOpenSupport }) => {
         <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-xs text-slate-300 font-medium tracking-wide">
           <p id="copyright-text" className="text-center select-all inline-flex items-center gap-2 justify-center flex-wrap">
             <BrandLogo size="xs" />
-            <span>©Developed and maintained by GW IMRAN</span>
+            <span>Developed and maintained by GW IMRAN</span>
           </p>
         </div>
       </div>

@@ -51,10 +51,10 @@ app.post('/api/payment/create-order', async (req, res) => {
 
     // Validate amount
     const parsedAmount = Number(amount);
-    if (!parsedAmount || isNaN(parsedAmount) || parsedAmount < 1) {
+    if (!parsedAmount || isNaN(parsedAmount) || parsedAmount < 1 || parsedAmount > 50000) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid amount. Minimum support amount is ₹1.',
+        error: 'Invalid amount. Support amount must be between ₹1 and ₹50,000.',
       });
     }
 
@@ -110,7 +110,12 @@ app.post('/api/payment/verify-payment', (req, res) => {
       .update(body.toString())
       .digest('hex');
 
-    const isAuthentic = expectedSignature === razorpay_signature;
+    const expectedBuf = Buffer.from(expectedSignature, 'utf8');
+    const actualBuf = Buffer.from(String(razorpay_signature), 'utf8');
+
+    const isAuthentic =
+      expectedBuf.length === actualBuf.length &&
+      crypto.timingSafeEqual(expectedBuf, actualBuf);
 
     if (isAuthentic) {
       return res.status(200).json({

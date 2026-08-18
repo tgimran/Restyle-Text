@@ -108,8 +108,8 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
   const handleContinueToPay = async () => {
     // Validate effective amount
     const finalAmount = isCustom ? parseFloat(customAmount) : selectedAmount;
-    if (!finalAmount || isNaN(finalAmount) || finalAmount < 1) {
-      setErrorMessage('Please enter a valid amount (Minimum ₹1)');
+    if (!finalAmount || isNaN(finalAmount) || finalAmount < 1 || finalAmount > 50000) {
+      setErrorMessage('Please enter a valid amount between ₹1 and ₹50,000');
       return;
     }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, CheckCircle2, AlertCircle, RefreshCw, Lock, Wallet, Heart, ShieldCheck, ExternalLink } from 'lucide-react';
+import { X, CheckCircle2, AlertCircle, RefreshCw, Lock, Wallet, Heart } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface SupportModalProps {
@@ -18,7 +18,9 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
   const [status, setStatus] = useState<PaymentStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [paymentDetails, setPaymentDetails] = useState<{ paymentId?: string; amount?: number }>({});
+  
   const inputRef = useRef<HTMLInputElement>(null);
+  const isSubmittingRef = useRef<boolean>(false);
 
   // Reset state on open
   useEffect(() => {
@@ -28,6 +30,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
       setSelectedAmount(50);
       setCustomAmount('');
       setIsCustom(false);
+      isSubmittingRef.current = false;
     }
   }, [isOpen]);
 
@@ -42,7 +45,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose, status]);
 
-  // Prevent background scroll
+  // Prevent background scroll when modal is active
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -54,26 +57,27 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
     };
   }, [isOpen]);
 
-  // Trigger celebration confetti on payment success
+  // Trigger celebration confetti on verified payment success
   const triggerSuccessCelebration = () => {
     try {
       confetti({
-        particleCount: 80,
-        spread: 65,
+        particleCount: 90,
+        spread: 70,
         origin: { y: 0.6 },
-        colors: ['#f43f5e', '#ec4899', '#f59e0b', '#10b981', '#6366f1'],
+        colors: ['#f43f5e', '#ec4899', '#f59e0b', '#10b981', '#6366f1', '#38bdf8'],
       });
     } catch {
-      // Confetti fallback
+      // Confetti fallback safely ignored
     }
   };
 
-  // Preset Selection
+  // Preset Selection Handler
   const handlePresetSelect = (amt: number) => {
     if (status === 'processing') return;
     setSelectedAmount(amt);
     setIsCustom(false);
     setCustomAmount('');
+    setErrorMessage('');
   };
 
   // Custom Amount Input Handler
@@ -82,6 +86,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
     const val = e.target.value;
     setCustomAmount(val);
     setIsCustom(true);
+    setErrorMessage('');
     const parsed = parseFloat(val);
     if (!isNaN(parsed) && parsed > 0) {
       setSelectedAmount(parsed);
@@ -91,21 +96,47 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
   // Ensure Razorpay Checkout script is loaded
   const loadRazorpayScript = (): Promise<boolean> => {
     return new Promise((resolve) => {
-      if ((window as any).Razorpay) {
+      if (typeof window !== 'undefined' && (window as any).Razorpay) {
         resolve(true);
         return;
       }
+
+      // Check if script element already exists in document
+      const existingScript = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+      if (existingScript) {
+        existingScript.addEventListener('load', () => resolve(true));
+        existingScript.addEventListener('error', () => resolve(false));
+        // If already loaded before listener attached
+        if ((window as any).Razorpay) {
+          resolve(true);
+          return;
+        }
+      }
+
       const script = document.createElement('script');
       script.src = 'https://checkout.razorpay.com/v1/checkout.js';
       script.async = true;
       script.onload = () => resolve(true);
       script.onerror = () => resolve(false);
       document.body.appendChild(script);
+
+      // Safety timeout after 8 seconds
+      setTimeout(() => {
+        if ((window as any).Razorpay) {
+          resolve(true);
+        } else {
+          resolve(false);
+        }
+      }, 8000);
     });
   };
 
   // Initiate Razorpay Checkout Flow
   const handleContinueToPay = async () => {
+    if (isSubmittingRef.current || status === 'processing') {
+      return;
+    }
+
     // Validate effective amount
     const finalAmount = isCustom ? parseFloat(customAmount) : selectedAmount;
     if (!finalAmount || isNaN(finalAmount) || finalAmount < 1 || finalAmount > 50000) {
@@ -115,37 +146,46 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
 
     setErrorMessage('');
     setStatus('processing');
+    isSubmittingRef.current = true;
 
     try {
-      // 1. Ensure Razorpay client script is present
+      // 1. Ensure Razorpay client SDK is ready
       const isLoaded = await loadRazorpayScript();
       if (!isLoaded || !(window as any).Razorpay) {
-        throw new Error('Razorpay SDK could not be loaded. Please check your internet connection.');
+        throw new Error('Razorpay Checkout SDK could not be loaded. Please check your internet connection and try again.');
       }
 
       // 2. Request backend order creation
+      console.log('[Payment] Requesting backend order creation for ₹' + finalAmount + '...');
       const res = await fetch('/api/payment/create-order', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
         body: JSON.stringify({ amount: finalAmount }),
       });
 
       let orderData: any = {};
       const contentType = res.headers.get('content-type') || '';
+      
       if (contentType.includes('application/json')) {
         orderData = await res.json();
       } else {
         const rawText = await res.text();
+        console.error('[Payment] Non-JSON response received from /api/payment/create-order:', rawText);
         throw new Error(
           res.status === 502 || res.status === 503 || rawText.includes('starting')
-            ? 'Server is warming up. Please try again in 5 seconds.'
-            : 'Unable to reach payment service. Please try again.'
+            ? 'Server is starting up. Please wait 5 seconds and try again.'
+            : 'Payment service currently unreachable. Please try again.'
         );
       }
 
-      if (!res.ok || !orderData.success) {
-        throw new Error(orderData.error || 'Failed to initialize payment order.');
+      if (!res.ok || !orderData.success || !orderData.orderId) {
+        throw new Error(orderData.error || 'Failed to create payment order with Razorpay.');
       }
+
+      console.log('[Payment] Order successfully initialized with ID:', orderData.orderId);
 
       // 3. Configure official Razorpay Checkout options
       const logoUrl = typeof window !== 'undefined' 
@@ -154,7 +194,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
 
       const options = {
         key: orderData.keyId,
-        amount: orderData.amount,
+        amount: orderData.amount, // in paise
         currency: orderData.currency || 'INR',
         name: 'Restyle Text',
         description: `Support Restyle Text (₹${finalAmount})`,
@@ -165,9 +205,21 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
           email: '',
           contact: '',
         },
-        retry: {
-          enabled: true,
-          max_count: 3,
+        notes: {
+          product: 'Restyle Text Support',
+          developer: 'GW IMRAN',
+        },
+        theme: {
+          color: '#e11d48', // iOS Rose Red Theme
+        },
+        modal: {
+          ondismiss: () => {
+            console.log('[Payment] Razorpay checkout popup closed by user');
+            isSubmittingRef.current = false;
+            setStatus((prev) => (prev === 'processing' ? 'cancelled' : prev));
+          },
+          escape: true,
+          backdropclose: false,
         },
         handler: async (response: {
           razorpay_payment_id: string;
@@ -175,10 +227,16 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
           razorpay_signature: string;
         }) => {
           try {
-            // Verify payment signature on backend
+            console.log('[Payment] Payment authorized in checkout! Verifying signature with backend...');
+            setStatus('processing');
+
+            // Verify payment signature securely on backend
             const verifyRes = await fetch('/api/payment/verify-payment', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+              },
               body: JSON.stringify(response),
             });
 
@@ -187,10 +245,11 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
             if (verifyContentType.includes('application/json')) {
               verifyData = await verifyRes.json();
             } else {
-              throw new Error('Payment verification server returned unexpected response.');
+              throw new Error('Payment verification server returned an invalid response.');
             }
 
             if (verifyRes.ok && verifyData.verified) {
+              console.log('[Payment] Signature verified successfully! Payment ID:', response.razorpay_payment_id);
               setPaymentDetails({
                 paymentId: response.razorpay_payment_id,
                 amount: finalAmount,
@@ -198,50 +257,47 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
               setStatus('success');
               triggerSuccessCelebration();
             } else {
+              console.error('[Payment] Signature verification failed:', verifyData);
               setStatus('failed');
-              setErrorMessage(verifyData.error || 'Signature verification failed.');
+              setErrorMessage(verifyData.error || 'Payment signature verification failed.');
             }
           } catch (err: any) {
+            console.error('[Payment Verification Exception]:', err);
             setStatus('failed');
-            setErrorMessage(err?.message || 'Payment verification encountered an issue.');
+            setErrorMessage(err?.message || 'Payment verification encountered an issue. If amount was debited, it will be credited back.');
+          } finally {
+            isSubmittingRef.current = false;
           }
-        },
-        modal: {
-          ondismiss: () => {
-            // If user closed the Razorpay popup without completing
-            setStatus((prev) => (prev === 'processing' ? 'cancelled' : prev));
-          },
-          escape: true,
-          backdropclose: false,
-        },
-        theme: {
-          color: '#e11d48', // iOS rose theme
         },
       };
 
       // 4. Open Razorpay Checkout Dialog
       const rzp = new (window as any).Razorpay(options);
+
       rzp.on('payment.failed', (response: any) => {
-        console.error('Razorpay payment.failed event:', response);
+        console.error('[Payment] Razorpay payment.failed event:', response);
+        isSubmittingRef.current = false;
         setStatus('failed');
         const errObj = response?.error || {};
         const reason =
           errObj.description ||
           errObj.reason ||
           errObj.message ||
-          'Payment was declined or cancelled. Please check your payment details or try another method.';
+          'Payment was declined or cancelled. Please check your payment method or try another UPI/Card.';
         setErrorMessage(reason);
       });
 
       rzp.open();
     } catch (err: any) {
-      console.error('Payment Error:', err);
+      console.error('[Payment Flow Error]:', err);
+      isSubmittingRef.current = false;
       setStatus('failed');
       setErrorMessage(err?.message || 'Unable to connect to payment gateway. Please try again.');
     }
   };
 
   const handleTryAgain = () => {
+    isSubmittingRef.current = false;
     setStatus('idle');
     setErrorMessage('');
   };
@@ -255,7 +311,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
   return (
     <div
       id="support-modal-backdrop"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3.5 sm:p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3.5 sm:p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200"
       onClick={() => {
         if (status !== 'processing') onClose();
       }}
@@ -421,7 +477,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
               )}
             </button>
 
-            {/* Razorpay Trust Badge & Iframe note */}
+            {/* Razorpay Trust Badge */}
             <div className="flex flex-col items-center justify-center gap-1 text-[11px] text-slate-400/90">
               <div className="flex items-center gap-1.5">
                 <Lock className="w-3 h-3 text-emerald-400" />
